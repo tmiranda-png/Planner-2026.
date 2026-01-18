@@ -46,21 +46,330 @@
 
         const { useState, useEffect } = React;
 
-        // --- COMPONENTE DE ÍCONE GENÉRICO (Para evitar bugs) ---
+        // --- SISTEMA DE ÍCONES SEGURO ---
         const Icon = ({ name, size = 18, className }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
             return <i data-lucide={kebabName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
         };
 
-        // Mapeando os ícones específicos para usar no código original
-        const Sun = (p) => <Icon name="Sun" {...p} />;
-        const Calendar = (p) => <Icon name="Calendar" {...p} />;
-        const CalendarDays = (p) => <Icon name="CalendarDays" {...p} />;
-        const Target = (p) => <Icon name="Target" {...p} />;
-        const Briefcase = (p) => <Icon name="Briefcase" {...p} />;
-        const Heart = (p) => <Icon name="Heart" {...p} />;
-        const Users = (p) => <Icon name="Users" {...p} />;
-        const Activity = (p) => <Icon name="Activity" {...p} />;
-        const Home = (p) => <Icon name="Home" {...p} />;
-        const BookOpen = (p) => <Icon name="Book
+        // --- CONFIGURAÇÃO FIREBASE ---
+        const firebaseConfig = JSON.parse(window.__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = window.__app_id;
+        signInAnonymously(auth).catch(console.error);
+
+        // --- DADOS DE LEITURA ---
+        const READING_PLAN_BY_MONTH = {
+          "Janeiro": ["João 1–4", "João 5–8", "João 9–12", "João 13–16", "João 17–21", "Romanos 1–3", "Romanos 4–6", "Romanos 7–9", "Romanos 10–12"],
+          "Fevereiro": ["1 Coríntios 1–3", "1 Coríntios 4–6", "1 Coríntios 7–9", "1 Coríntios 10–12", "Mateus 21–24"],
+          "Março": ["Êxodo 4–6", "Êxodo 10–12", "Êxodo 13–15", "Êxodo 16–18", "Judas 1"],
+          "Abril": ["1 João 1–3", "1 João 4–5", "1 Pedro 1–3", "1 Pedro 4–5"],
+          "Maio": ["Isaías 10–12", "Isaías 13–15", "Isaías 16–18"],
+          "Junho": ["Juízes 1–3", "Juízes 4–6", "Salmos 5–8"],
+          "Julho": ["1 Reis 19–22", "1 Reis 16–18", "2 Reis 19–21"],
+          "Agosto": ["2 Crônicas 1–3", "2 Crônicas 4–6"],
+          "Setembro": ["Efésios 4–6", "Levítico 1–3"],
+          "Outubro": ["1 Timóteo 1–3", "Habacuque 1–3"],
+          "Novembro": ["Ezequiel 1–3", "Marcos 10–12"],
+          "Dezembro": ["Jeremias 1–3", "Jonas 1–4"]
+        };
+
+        // --- COMPONENTES UI ---
+        const Title = ({ children, subtitle }) => (
+            <div className="mb-6">
+                <h2 className="text-3xl text-[#2C2C2C] font-normal italic mb-1 serif-font">{children}</h2>
+                {subtitle && <p className="text-[#8C8C8C] text-sm font-light uppercase tracking-widest">{subtitle}</p>}
+            </div>
+        );
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-xl border border-[#F0EAE0] shadow-sm p-6 ${className}`}>{children}</div>
+        );
+        const Button = ({ children, onClick, variant = "primary", className = "", disabled = false }) => {
+            const base = "px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2";
+            const style = variant === "primary" ? "bg-[#804653] text-white hover:bg-[#683642]" : "bg-[#F5F2EB] text-[#5C5C5C]";
+            return <button onClick={onClick} disabled={disabled} className={`${base} ${style} ${className}`}>{children}</button>;
+        };
+        const Tag = ({ label }) => (
+            <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-md font-medium bg-[#E5E0D8] text-[#5C5C5C]">{label}</span>
+        );
+
+        // --- APP PRINCIPAL ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('daily');
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            const [saveStatus, setSaveStatus] = useState('saved');
+            const [spiritualTab, setSpiritualTab] = useState('reading');
+            const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+            const [currentYear] = useState(2026);
+            const [inputs, setInputs] = useState({ text: '', amount: '', time: '' });
+
+            // ESTADO INICIAL COMPLETO
+            const initialState = {
+                daily: { routine: [{ id: 1, time: '07:00', task: 'Acordar e Água com limão', completed: false }], notes: '' },
+                weekly: { events: [] },
+                spiritual: { completedReadingIds: [], prayerRoom: { professional: [], family: [], ministerial: [] } },
+                connectionGroup: { studies: [], discussed: [], prayers: [] },
+                health: { appointments: [], exams: [], notes: '' },
+                home: { daily: [], weekly: [], monthly: [] },
+                reading: { current: [] },
+                finance: { transactions: [] },
+                wishlist: { home: [], personal: [] },
+                marriage: { todo: [], gifts: [] },
+                goals: { short: [], medium: [], long: [] },
+                professional: { objectives: [], tasks: [] },
+                growthScale: { notes: [], improvements: [] }
+            };
+
+            const [data, setData] = useState(initialState);
+
+            // Sincronização
+            useEffect(() => { if(auth) onAuthStateChanged(auth, setUser); }, []);
+            useEffect(() => {
+                if (!user || !db) return;
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v1_full');
+                return onSnapshot(docRef, (s) => { if (s.exists()) setData(p => ({ ...initialState, ...s.data() })); });
+            }, [user]);
+            useEffect(() => {
+                if (!user || !db) return;
+                setSaveStatus('saving');
+                const t = setTimeout(() => setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v1_full'), data).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')), 1500);
+                return () => clearTimeout(t);
+            }, [data, user]);
+
+            // CRUD
+            const handleInput = (f, v) => setInputs(p => ({ ...p, [f]: v }));
+            const addItem = (mod, sub, item) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: [...(p[mod][sub]||[]), item] } }));
+            const removeItem = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].filter(i => i.id !== id) } }));
+            const toggleComplete = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].map(i => i.id === id ? { ...i, completed: !i.completed } : i) } }));
+
+            // --- RENDERIZADORES ---
+            
+            const renderDailyView = () => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Planejamento de Hoje">Minha Rotina</Title>
+                    <Card>
+                        <div className="flex gap-2 mb-6">
+                            <input placeholder="08:00" className="w-24 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.time} onChange={e => handleInput('time', e.target.value)} />
+                            <input placeholder="Adicionar tarefa..." className="flex-1 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
+                            <button onClick={() => { if(inputs.text){ addItem('daily', 'routine', {id: Date.now(), time: inputs.time, task: inputs.text, completed:false}); setInputs({text:'', time:''}); } }} className="bg-[#804653] text-white p-3 rounded-lg hover:bg-[#683642]"><Icon name="Plus" /></button>
+                        </div>
+                        <div className="space-y-3">
+                            {data.daily.routine.sort((a,b)=>a.time.localeCompare(b.time)).map(i => (
+                                <div key={i.id} className="flex justify-between items-center p-3 bg-white hover:bg-[#FDFBF7] border border-transparent hover:border-[#F0EAE0] rounded-lg group">
+                                    <div className="flex gap-4 items-center">
+                                        <span className="text-xs font-bold text-[#804653] w-12">{i.time}</span>
+                                        <button onClick={() => toggleComplete('daily', 'routine', i.id)} className={`text-sm ${i.completed ? 'line-through text-gray-400' : ''}`}>{i.task}</button>
+                                    </div>
+                                    <button onClick={() => removeItem('daily', 'routine', i.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400"><Icon name="Trash2" size={16}/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                    <Card><h3 className="serif-font text-xl mb-4 text-[#5C5C5C]">Notas</h3><textarea className="w-full h-32 bg-[#F9F7F2] p-4 rounded-lg text-sm resize-none outline-none" value={data.daily.notes} onChange={(e) => setData(p => ({...p, daily: {...p.daily, notes: e.target.value}}))} /></Card>
+                </div>
+            );
+
+            const renderWeeklyView = () => {
+                const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+                return (
+                    <div className="animate-fade-in">
+                        <Title subtitle="Visão Macro">Semanal</Title>
+                        <div className="grid grid-cols-7 gap-2 overflow-x-auto pb-4">
+                            {days.map(day => (
+                                <div key={day} className="min-w-[140px] bg-white rounded-xl border border-[#F0EAE0] p-3 flex flex-col h-[500px]">
+                                    <div className="text-center serif-font text-[#804653] pb-2 mb-2 border-b border-[#F0EAE0]">{day}</div>
+                                    <div className="flex-1 overflow-y-auto space-y-2">
+                                        {data.weekly.events.filter(e => e.day === day).map(evt => (
+                                            <div key={evt.id} className="bg-[#FDFBF7] p-2 rounded border border-[#F5F2EB] text-xs relative group">
+                                                <p>{evt.text}</p>
+                                                <button onClick={() => removeItem('weekly', 'events', evt.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100"><Icon name="X" size={10}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => { const t = prompt("Tarefa:"); if(t) addItem('weekly', 'events', {id: Date.now(), day, text: t}); }} className="mt-2 text-xs text-[#804653] hover:underline">+ Add</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderFinanceView = () => {
+                const total = data.finance.transactions.reduce((acc, t) => acc + (t.type === 'income' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
+                return (
+                    <div className="animate-fade-in space-y-6">
+                        <Title subtitle="Recursos">Financeiro</Title>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card className="md:col-span-2">
+                                <div className="text-4xl serif-font mb-6 text-[#804653]">R$ {total.toFixed(2)}</div>
+                                <div className="flex gap-2 mb-4">
+                                    <input className="flex-1 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="Descrição" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
+                                    <input className="w-24 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="R$" type="number" value={inputs.amount} onChange={e => handleInput('amount', e.target.value)} />
+                                    <Button onClick={() => { if(inputs.text && inputs.amount) { addItem('finance', 'transactions', {id: Date.now(), desc: inputs.text, amount: inputs.amount, type: 'income'}); setInputs(p=>({...p, text:'', amount:''})); } }} className="bg-emerald-600 text-white">+</Button>
+                                    <Button onClick={() => { if(inputs.text && inputs.amount) { addItem('finance', 'transactions', {id: Date.now(), desc: inputs.text, amount: inputs.amount, type: 'expense'}); setInputs(p=>({...p, text:'', amount:''})); } }} className="bg-red-500 text-white">-</Button>
+                                </div>
+                                <div className="space-y-2 max-h-64 overflow-y-auto">
+                                    {data.finance.transactions.map(t => (
+                                        <div key={t.id} className="flex justify-between text-sm p-2 border-b border-[#F9F7F2]">
+                                            <span>{t.desc}</span>
+                                            <span className={t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}>{t.type === 'income' ? '+' : '-'} R$ {t.amount}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Card>
+                            <Card className="flex items-center justify-center"><Icon name="PieChart" size={64} className="text-[#F2DCD6]" /></Card>
+                        </div>
+                    </div>
+                );
+            };
+
+            const GenericListView = ({ module, title, cols, icon }) => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Lista">{title}</Title>
+                    <div className="flex gap-4 overflow-x-auto pb-4">
+                        {cols.map(col => (
+                            <div key={col.id} className="min-w-[250px] bg-white rounded-xl border border-[#F0EAE0] p-4 flex flex-col h-[500px]">
+                                <h4 className="serif-font text-[#804653] border-b border-[#F0EAE0] pb-2 mb-3 flex items-center gap-2"><Icon name={icon} size={14}/> {col.label}</h4>
+                                <div className="flex-1 overflow-y-auto space-y-2">
+                                    {(data[module][col.id] || []).map(item => (
+                                        <div key={item.id} className="bg-[#F9F7F2] p-3 rounded shadow-sm text-sm text-[#4A4A4A] group relative">
+                                            {item.text}
+                                            <button onClick={() => removeItem(module, col.id, item.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[#D1CCC4]"><Icon name="X" size={12}/></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <input className="mt-2 bg-[#F5F2EB] p-2 rounded text-xs w-full outline-none" placeholder="+ Adicionar" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem(module, col.id, { id: Date.now(), text: e.target.value }); e.target.value = ''; } }} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            // RENDERIZADORES GENÉRICOS (Para economizar espaço e funcionar tudo)
+            const renderProfessionalView = () => <GenericListView module="professional" title="Profissional" icon="Briefcase" cols={[{id:'objectives', label:'Objetivos'}, {id:'tasks', label:'Tarefas'}]} />;
+            const renderConnectionGroupView = () => <GenericListView module="connectionGroup" title="Grupo de Conexão" icon="Users" cols={[{id:'studies', label:'Estudos'}, {id:'discussed', label:'Discutido'}]} />;
+            const renderGrowthScaleView = () => <GenericListView module="growthScale" title="Escola do Crescimento" icon="GraduationCap" cols={[{id:'notes', label:'Notas'}, {id:'improvements', label:'Melhorias'}]} />;
+            const renderWishlistView = () => <GenericListView module="wishlist" title="Lista de Desejos" icon="Gift" cols={[{id:'home', label:'Casa'}, {id:'personal', label:'Pessoal'}]} />;
+            const renderMarriageView = () => <GenericListView module="marriage" title="Casamento" icon="HeartHandshake" cols={[{id:'todo', label:'Fazer Juntos'}, {id:'gifts', label:'Presentes'}]} />;
+            const renderGoalsView = () => <GenericListView module="goals" title="Objetivos" icon="Target" cols={[{id:'short', label:'Curto Prazo'}, {id:'medium', label:'Médio Prazo'}, {id:'long', label:'Longo Prazo'}]} />;
+            const renderHomeView = () => <GenericListView module="home" title="Rotina da Casa" icon="Home" cols={[{id:'daily', label:'Diário'}, {id:'weekly', label:'Semanal'}, {id:'monthly', label:'Mensal'}]} />;
+
+            const renderSpiritualView = () => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Devocional">Vida com Deus</Title>
+                    <div className="flex gap-4 mb-6 border-b border-[#E5E0D8]">
+                        <button onClick={() => setSpiritualTab('reading')} className={`pb-2 px-4 text-sm serif-font ${spiritualTab==='reading'?'border-b-2 border-[#804653] text-[#804653]':''}`}>Leitura</button>
+                        <button onClick={() => setSpiritualTab('prayer')} className={`pb-2 px-4 text-sm serif-font ${spiritualTab==='prayer'?'border-b-2 border-[#804653] text-[#804653]':''}`}>Oração</button>
+                    </div>
+                    {spiritualTab === 'reading' ? (
+                        <div className="space-y-4">
+                            {Object.entries(READING_PLAN_BY_MONTH).map(([month, readings]) => (
+                                <Card key={month}>
+                                    <h4 className="serif-font mb-3">{month}</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        {readings.map((r, i) => {
+                                            const id = `${month}-${i}`;
+                                            const done = (data.spiritual.completedReadingIds||[]).includes(id);
+                                            return (
+                                                <div key={i} onClick={()=>{
+                                                    const list = data.spiritual.completedReadingIds || [];
+                                                    setData(p=>({...p, spiritual: {...p.spiritual, completedReadingIds: done ? list.filter(x=>x!==id) : [...list, id]}}))
+                                                }} className={`text-xs p-2 rounded cursor-pointer border ${done ? 'bg-[#804653] text-white border-[#804653]' : 'border-[#E5E0D8]'}`}>
+                                                    {r}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <GenericListView module="spiritual" title="Sala de Oração" icon="Heart" cols={[{id:'family', label:'Família'}, {id:'professional', label:'Profissional'}, {id:'ministerial', label:'Ministerial'}]} />
+                    )}
+                </div>
+            );
+
+            const renderCalendarView = () => (
+                <div className="animate-fade-in">
+                    <Title subtitle="Agenda">Calendário {currentYear}</Title>
+                    <Card>
+                        <div className="flex justify-between items-center mb-6">
+                             <button onClick={() => setCurrentMonth(p => Math.max(0, p - 1))}><Icon name="ChevronRight" className="rotate-180"/></button>
+                             <h3 className="serif-font text-2xl capitalize">{new Date(currentYear, currentMonth).toLocaleString('pt-BR', {month:'long'})}</h3>
+                             <button onClick={() => setCurrentMonth(p => Math.min(11, p + 1))}><Icon name="ChevronRight"/></button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 h-96">
+                            {Array.from({length: new Date(currentYear, currentMonth, 1).getDay()}).map((_,i)=><div key={i}/>)}
+                            {Array.from({length: new Date(currentYear, currentMonth+1, 0).getDate()}).map((_,i)=>(
+                                <div key={i} className="border border-[#F0EAE0] p-1 text-sm bg-[#FDFBF7] hover:bg-white transition-colors">{i+1}</div>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+            );
+
+            const MenuBtn = ({id, label, icon}) => (
+                <button onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 border-r-4 ${activeTab === id ? 'border-[#804653] bg-[#F5F2EB]' : 'border-transparent hover:bg-[#FCFBF8]'}`}>
+                    <div className={activeTab === id ? 'text-[#804653]' : 'text-[#A1A1A1]'}><Icon name={icon} /></div>
+                    <span className={`text-sm font-medium ${activeTab === id ? 'text-[#2C2C2C]' : 'text-[#8C8C8C]'}`}>{label}</span>
+                </button>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col md:flex-row bg-[#FDFBF7]">
+                    <aside className={`fixed md:relative z-20 w-64 h-full bg-white border-r border-[#F0EAE0] flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                        <div className="p-8 pb-4">
+                            <h1 className="text-2xl italic text-[#2C2C2C] serif-font">Planner 2026</h1>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-[#804653] mt-2">Organização & Estilo</p>
+                        </div>
+                        <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
+                            <MenuBtn id="daily" label="Visão Diária" icon="Sun" />
+                            <MenuBtn id="weekly" label="Visão Semanal" icon="Calendar" />
+                            <MenuBtn id="calendar" label="Calendário" icon="CalendarDays" />
+                            <MenuBtn id="goals" label="Meus Objetivos" icon="Target" />
+                            <MenuBtn id="professional" label="Profissional" icon="Briefcase" />
+                            <MenuBtn id="spiritual" label="Vida com Deus" icon="Heart" />
+                            <MenuBtn id="connectionGroup" label="Grupo de Conexão" icon="Users" />
+                            <MenuBtn id="home" label="Rotina da Casa" icon="Home" />
+                            <MenuBtn id="finance" label="Financeiro" icon="DollarSign" />
+                            <MenuBtn id="wishlist" label="Desejos" icon="Gift" />
+                            <MenuBtn id="marriage" label="Casamento" icon="HeartHandshake" />
+                            <MenuBtn id="growthScale" label="Escola Crescimento" icon="GraduationCap" />
+                        </nav>
+                        <div className="p-6 border-t border-[#F0EAE0]"><div className="flex items-center gap-2 text-xs text-[#8C8C8C]"><Icon name="Cloud" size={12} className={saveStatus === 'saved' ? 'text-emerald-500' : 'text-amber-500'} /> {saveStatus === 'saved' ? 'Sincronizado' : 'Salvando...'}</div></div>
+                    </aside>
+
+                    <div className="md:hidden fixed top-0 w-full bg-white/95 backdrop-blur-sm z-10 border-b border-[#F0EAE0] px-6 py-4 flex justify-between items-center shadow-sm">
+                        <span className="serif-font text-lg text-[#2C2C2C]">Planner 2026</span>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Icon name={isMobileMenuOpen ? "X" : "Menu"} /></button>
+                    </div>
+
+                    <main className="flex-1 p-6 md:p-12 pt-24 md:pt-12 overflow-y-auto h-screen">
+                        {activeTab === 'daily' && renderDailyView()}
+                        {activeTab === 'weekly' && renderWeeklyView()}
+                        {activeTab === 'goals' && renderGoalsView()}
+                        {activeTab === 'finance' && renderFinanceView()}
+                        {activeTab === 'home' && renderHomeView()}
+                        {activeTab === 'professional' && renderProfessionalView()}
+                        {activeTab === 'connectionGroup' && renderConnectionGroupView()}
+                        {activeTab === 'growthScale' && renderGrowthScaleView()}
+                        {activeTab === 'wishlist' && renderWishlistView()}
+                        {activeTab === 'marriage' && renderMarriageView()}
+                        {activeTab === 'spiritual' && renderSpiritualView()}
+                        {activeTab === 'calendar' && renderCalendarView()}
+                    </main>
+
+                    {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/5 z-10 md:hidden backdrop-blur-[1px]"></div>}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
