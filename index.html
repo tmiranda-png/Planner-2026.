@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script>
-        // --- CONFIGURAÇÃO JÁ PREENCHIDA COM SEUS DADOS ---
+        // --- SUAS CHAVES DO FIREBASE (JÁ CONFIGURADAS) ---
         window.__firebase_config = JSON.stringify({
             apiKey: "AIzaSyB2KvW1Ot155Ac2uzVzLtCGobZ5-dQoXOE",
             authDomain: "planner-2026-a84a7.firebaseapp.com",
@@ -22,12 +22,22 @@
             appId: "1:669302877429:web:887d60f7c5fdc7d463a9bc",
             measurementId: "G-P8GN3GRQPE"
         });
-
         window.__app_id = 'planner-clean-girl-v1';
-        window.__gemini_api_key = ""; // IA Opcional
+        window.__gemini_api_key = ""; 
     </script>
+
+    <style>
+        /* Ajustes visuais finos */
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #FDFBF7; color: #4A4A4A; }
+        .serif-font { font-family: 'Playfair Display', serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #E5E0D8; border-radius: 3px; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </head>
-<body class="bg-[#FDFBF7]">
+<body>
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
@@ -35,79 +45,65 @@
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // Ícones
-        const { 
-            Heart, Home, DollarSign, Calendar, CheckCircle, 
-            Plus, Trash2, Sun, BookOpen, Menu, 
-            X, Cloud, Youtube, Gift, 
-            PenTool, ChevronRight, Activity, TrendingUp, Sparkles, Loader2,
-            CalendarDays, Target, Briefcase, PieChart, Check,
-            Users, Stethoscope, Quote, GraduationCap, HeartHandshake
-        } = lucide;
+        const { useState, useEffect } = React;
 
-        // Configuração Firebase
+        // --- CORREÇÃO DOS ÍCONES (O segredo para não dar tela branca) ---
+        const Icon = ({ name, size = 18, className }) => {
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, [name]);
+            // Converte "NomeDoIcone" para "nome-do-icone"
+            const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+            return <i data-lucide={kebabName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
+        };
+
+        // --- LÓGICA DO FIREBASE ---
         const firebaseConfig = JSON.parse(window.__firebase_config);
-        let app, auth, db;
-        
+        let auth, db;
         try {
-            app = initializeApp(firebaseConfig);
+            const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            // Login Automático
-            signInAnonymously(auth).catch(err => console.error("Erro Login:", err));
+            signInAnonymously(auth).catch(err => console.error("Login falhou:", err));
         } catch (e) {
             console.error("Erro Firebase:", e);
         }
 
         const appId = window.__app_id;
 
-        const { useState, useEffect } = React;
-
-        // Componentes Básicos
+        // --- COMPONENTES VISUAIS ---
         const Title = ({ children, subtitle }) => (
             <div className="mb-6">
-                <h2 className="text-3xl text-[#2C2C2C] font-normal italic mb-1" style={{fontFamily: 'serif'}}>{children}</h2>
+                <h2 className="text-3xl text-[#2C2C2C] font-normal italic mb-1 serif-font">{children}</h2>
                 {subtitle && <p className="text-[#8C8C8C] text-sm font-light uppercase tracking-widest">{subtitle}</p>}
             </div>
         );
 
-        const Card = ({ children, className = "" }) => (
-            <div className={`bg-white rounded-xl border border-[#F0EAE0] shadow-sm p-6 ${className}`}>{children}</div>
+        const Card = ({ children }) => (
+            <div className="bg-white rounded-xl border border-[#F0EAE0] shadow-sm p-6 mb-4">{children}</div>
         );
 
-        const Button = ({ children, onClick, variant = "primary", className = "", disabled = false }) => {
-            const base = "px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2";
-            const style = variant === "primary" ? "bg-[#804653] text-white hover:bg-[#683642]" : "bg-[#F5F2EB] text-[#5C5C5C]";
-            return <button onClick={onClick} disabled={disabled} className={`${base} ${style} ${className}`}>{children}</button>;
-        };
-
+        // --- APP PRINCIPAL ---
         const App = () => {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('daily');
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [saveStatus, setSaveStatus] = useState('saved');
 
-            // Estado Inicial
+            // Estado Inicial (Dados do Planner)
             const initialState = {
                 daily: { routine: [{ id: 1, time: '07:00', task: 'Acordar e Água com limão', completed: false }], notes: '' },
                 weekly: { events: [] },
-                spiritual: { readingPlan: [], completedReadingIds: [], weeklyVerse: '', prayerRoom: { professional: [], family: [] }, devotionalMessage: '' },
-                health: { measurements: {}, composition: { muscle: 40, fat: 20, water: 30, bone: 10 }, appointments: [], healthNotes: '' },
-                home: { daily: [], weekly: [], monthly: [] },
-                reading: { current: [], pagesReadYear: 0 },
-                finance: { transactions: [] },
-                wishlist: { home: [], personal: [] },
                 goals: { short: [], medium: [], long: [] },
-                professional: { objectives: [], important: [] }
+                finance: { transactions: [] },
+                home: { daily: [], weekly: [] }
             };
 
             const [data, setData] = useState(initialState);
             const [inputs, setInputs] = useState({ text: '', time: '' });
 
-            // Sincronização
-            useEffect(() => {
-                if(auth) onAuthStateChanged(auth, setUser);
-            }, []);
+            // Sincronização com Banco de Dados
+            useEffect(() => { if(auth) onAuthStateChanged(auth, setUser); }, []);
 
             useEffect(() => {
                 if (!user || !db) return;
@@ -129,64 +125,126 @@
                 return () => clearTimeout(t);
             }, [data, user]);
 
-            // Funções
+            // Funções de Adicionar/Remover
             const handleInput = (f, v) => setInputs(p => ({ ...p, [f]: v }));
-            const addItem = (mod, sub, item) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: [...(p[mod][sub]||[]), item] } }));
-            const removeItem = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].filter(i => i.id !== id) } }));
-            const toggleComplete = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].map(i => i.id === id ? { ...i, completed: !i.completed } : i) } }));
+            
+            const addItem = (mod, sub, item) => {
+                setData(p => ({ 
+                    ...p, 
+                    [mod]: { 
+                        ...p[mod], 
+                        [sub]: [...(p[mod][sub] || []), item] 
+                    } 
+                }));
+            };
 
-            // Renderização Simplificada
+            const removeItem = (mod, sub, id) => {
+                setData(p => ({ 
+                    ...p, 
+                    [mod]: { 
+                        ...p[mod], 
+                        [sub]: p[mod][sub].filter(i => i.id !== id) 
+                    } 
+                }));
+            };
+
+            const toggleComplete = (mod, sub, id) => {
+                setData(p => ({ 
+                    ...p, 
+                    [mod]: { 
+                        ...p[mod], 
+                        [sub]: p[mod][sub].map(i => i.id === id ? { ...i, completed: !i.completed } : i) 
+                    } 
+                }));
+            };
+
+            // --- TELAS DO PLANNER ---
+            
             const renderDaily = () => (
-                <div className="animate-fade-in space-y-6">
+                <div className="animate-fade-in">
                     <Title subtitle="Planejamento de Hoje">Minha Rotina</Title>
                     <Card>
-                        <div className="flex gap-2 mb-4">
-                            <input placeholder="08:00" className="w-20 p-2 bg-[#F9F7F2] rounded" value={inputs.time} onChange={e => handleInput('time', e.target.value)} />
-                            <input placeholder="Tarefa..." className="flex-1 p-2 bg-[#F9F7F2] rounded" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
-                            <Button onClick={() => { if(inputs.text){ addItem('daily', 'routine', {id: Date.now(), time: inputs.time, task: inputs.text, completed:false}); setInputs({text:'', time:''}); } }}><Plus size={16}/></Button>
+                        <div className="flex gap-2 mb-6">
+                            <input placeholder="08:00" className="w-24 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.time} onChange={e => handleInput('time', e.target.value)} />
+                            <input placeholder="Adicionar tarefa..." className="flex-1 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
+                            <button onClick={() => { if(inputs.text){ addItem('daily', 'routine', {id: Date.now(), time: inputs.time, task: inputs.text, completed:false}); setInputs({text:'', time:''}); } }} className="bg-[#804653] text-white p-3 rounded-lg hover:bg-[#683642] transition-colors"><Icon name="Plus" /></button>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {data.daily.routine.map(i => (
-                                <div key={i.id} className="flex justify-between items-center p-2 hover:bg-[#F9F7F2] rounded">
-                                    <div className="flex gap-4">
-                                        <span className="font-bold text-[#804653] w-12">{i.time}</span>
-                                        <span onClick={() => toggleComplete('daily', 'routine', i.id)} className={`cursor-pointer ${i.completed ? 'line-through text-gray-400' : ''}`}>{i.task}</span>
+                                <div key={i.id} className="flex justify-between items-center p-3 bg-white hover:bg-[#FDFBF7] border border-transparent hover:border-[#F0EAE0] rounded-lg transition-all group">
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-xs font-bold text-[#804653] w-12 font-mono">{i.time}</span>
+                                        <button onClick={() => toggleComplete('daily', 'routine', i.id)} className={`text-sm text-left ${i.completed ? 'line-through text-gray-400' : 'text-[#4A4A4A]'}`}>{i.task}</button>
                                     </div>
-                                    <button onClick={() => removeItem('daily', 'routine', i.id)}><Trash2 size={14} className="text-gray-300 hover:text-red-400"/></button>
+                                    <button onClick={() => removeItem('daily', 'routine', i.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity"><Icon name="Trash2" size={16}/></button>
                                 </div>
                             ))}
                         </div>
                     </Card>
+                    <Card>
+                        <h3 className="serif-font text-xl mb-4 text-[#5C5C5C]">Anotações & Gratidão</h3>
+                        <textarea className="w-full h-32 bg-[#F9F7F2] p-4 rounded-lg text-sm resize-none border-none outline-none" placeholder="Escreva aqui..." value={data.daily.notes} onChange={(e) => setData(p => ({...p, daily: {...p.daily, notes: e.target.value}}))} />
+                    </Card>
                 </div>
             );
 
-            // Menu
-            const MenuBtn = ({id, label, icon: Icon}) => (
-                <button onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-3 ${activeTab === id ? 'bg-[#F5F2EB] border-r-4 border-[#804653]' : 'hover:bg-gray-50'}`}>
-                    <Icon size={18} className={activeTab === id ? 'text-[#804653]' : 'text-gray-400'} />
-                    <span className="text-sm font-medium text-gray-600">{label}</span>
+            // Botão do Menu Lateral
+            const MenuBtn = ({id, label, icon}) => (
+                <button onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 border-r-4 ${activeTab === id ? 'border-[#804653] bg-[#F5F2EB]' : 'border-transparent hover:bg-[#FCFBF8]'}`}>
+                    <div className={activeTab === id ? 'text-[#804653]' : 'text-[#A1A1A1]'}><Icon name={icon} /></div>
+                    <span className={`text-sm font-medium ${activeTab === id ? 'text-[#2C2C2C]' : 'text-[#8C8C8C]'}`}>{label}</span>
                 </button>
             );
 
             return (
-                <div className="min-h-screen flex bg-[#FDFBF7]">
-                    <aside className={`fixed md:relative z-20 w-64 h-full bg-white border-r flex flex-col transition-all ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                        <div className="p-8"><h1 className="text-2xl italic text-[#2C2C2C]" style={{fontFamily: 'serif'}}>Planner 2026</h1></div>
-                        <nav className="flex-1 overflow-y-auto">
-                            <MenuBtn id="daily" label="Diário" icon={Sun} />
-                            <MenuBtn id="weekly" label="Semanal" icon={Calendar} />
-                            <MenuBtn id="goals" label="Objetivos" icon={Target} />
-                            <MenuBtn id="finance" label="Financeiro" icon={DollarSign} />
-                            <MenuBtn id="home" label="Casa" icon={Home} />
+                <div className="min-h-screen flex flex-col md:flex-row bg-[#FDFBF7]">
+                    {/* MENU LATERAL */}
+                    <aside className={`fixed md:relative z-20 w-64 h-full bg-white border-r border-[#F0EAE0] flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                        <div className="p-8 pb-4">
+                            <h1 className="text-2xl italic text-[#2C2C2C] serif-font">Planner 2026</h1>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-[#804653] mt-2">Organização & Estilo</p>
+                        </div>
+                        <nav className="flex-1 overflow-y-auto py-4">
+                            <MenuBtn id="daily" label="Visão Diária" icon="Sun" />
+                            <MenuBtn id="weekly" label="Visão Semanal" icon="Calendar" />
+                            <MenuBtn id="goals" label="Meus Objetivos" icon="Target" />
+                            <MenuBtn id="finance" label="Financeiro" icon="DollarSign" />
+                            <MenuBtn id="home" label="Rotina da Casa" icon="Home" />
                         </nav>
-                        <div className="p-4 text-xs text-center text-gray-400">Status: {saveStatus}</div>
+                        <div className="p-6 border-t border-[#F0EAE0]">
+                            <div className="flex items-center gap-2 text-xs text-[#8C8C8C]">
+                                <Icon name="Cloud" size={12} className={saveStatus === 'saved' ? 'text-emerald-500' : 'text-amber-500'} /> 
+                                {saveStatus === 'saved' ? 'Sincronizado' : 'Salvando...'}
+                            </div>
+                        </div>
                     </aside>
-                    
-                    <div className="md:hidden fixed top-0 w-full bg-white p-4 border-b z-10 flex justify-between">
-                        <span>Planner</span>
-                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Menu/></button>
+
+                    {/* CABEÇALHO MOBILE */}
+                    <div className="md:hidden fixed top-0 w-full bg-white/95 backdrop-blur-sm z-10 border-b border-[#F0EAE0] px-6 py-4 flex justify-between items-center shadow-sm">
+                        <span className="serif-font text-lg text-[#2C2C2C]">Planner 2026</span>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Icon name={isMobileMenuOpen ? "X" : "Menu"} /></button>
                     </div>
 
-                    <main className="flex-1 p-8 pt-20 md:pt-8 overflow-y-auto h-screen">
+                    {/* CONTEÚDO PRINCIPAL */}
+                    <main className="flex-1 p-6 md:p-12 pt-24 md:pt-12 overflow-y-auto h-screen">
                         {activeTab === 'daily' && renderDaily()}
-                        {activeTab !== 'daily' && <div className="text-center mt-20 text-gray-400">Selecione "Diário" para testar.
+                        {activeTab !== 'daily' && (
+                            <div className="flex flex-col items-center justify-center h-full text-center opacity-50">
+                                <Icon name="Construction" size={48} className="text-[#D1CCC4] mb-4"/>
+                                <h3 className="serif-font text-xl text-[#5C5C5C]">Em Construção</h3>
+                                <p className="text-sm mt-2">Clique em "Visão Diária" para testar.</p>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* OVERLAY MOBILE */}
+                    {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/5 z-10 md:hidden backdrop-blur-[1px]"></div>}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
