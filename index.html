@@ -12,7 +12,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script>
-        // --- SUAS CHAVES DO FIREBASE (JÁ CONFIGURADAS) ---
         window.__firebase_config = JSON.stringify({
             apiKey: "AIzaSyB2KvW1Ot155Ac2uzVzLtCGobZ5-dQoXOE",
             authDomain: "planner-2026-a84a7.firebaseapp.com",
@@ -27,7 +26,6 @@
     </script>
 
     <style>
-        /* Ajustes visuais finos */
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #FDFBF7; color: #4A4A4A; }
         .serif-font { font-family: 'Playfair Display', serif; }
@@ -35,6 +33,7 @@
         ::-webkit-scrollbar-thumb { background: #E5E0D8; border-radius: 3px; }
         .animate-fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
@@ -47,204 +46,21 @@
 
         const { useState, useEffect } = React;
 
-        // --- CORREÇÃO DOS ÍCONES (O segredo para não dar tela branca) ---
+        // --- COMPONENTE DE ÍCONE GENÉRICO (Para evitar bugs) ---
         const Icon = ({ name, size = 18, className }) => {
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            }, [name]);
-            // Converte "NomeDoIcone" para "nome-do-icone"
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
             return <i data-lucide={kebabName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
         };
 
-        // --- LÓGICA DO FIREBASE ---
-        const firebaseConfig = JSON.parse(window.__firebase_config);
-        let auth, db;
-        try {
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            signInAnonymously(auth).catch(err => console.error("Login falhou:", err));
-        } catch (e) {
-            console.error("Erro Firebase:", e);
-        }
-
-        const appId = window.__app_id;
-
-        // --- COMPONENTES VISUAIS ---
-        const Title = ({ children, subtitle }) => (
-            <div className="mb-6">
-                <h2 className="text-3xl text-[#2C2C2C] font-normal italic mb-1 serif-font">{children}</h2>
-                {subtitle && <p className="text-[#8C8C8C] text-sm font-light uppercase tracking-widest">{subtitle}</p>}
-            </div>
-        );
-
-        const Card = ({ children }) => (
-            <div className="bg-white rounded-xl border border-[#F0EAE0] shadow-sm p-6 mb-4">{children}</div>
-        );
-
-        // --- APP PRINCIPAL ---
-        const App = () => {
-            const [user, setUser] = useState(null);
-            const [activeTab, setActiveTab] = useState('daily');
-            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-            const [saveStatus, setSaveStatus] = useState('saved');
-
-            // Estado Inicial (Dados do Planner)
-            const initialState = {
-                daily: { routine: [{ id: 1, time: '07:00', task: 'Acordar e Água com limão', completed: false }], notes: '' },
-                weekly: { events: [] },
-                goals: { short: [], medium: [], long: [] },
-                finance: { transactions: [] },
-                home: { daily: [], weekly: [] }
-            };
-
-            const [data, setData] = useState(initialState);
-            const [inputs, setInputs] = useState({ text: '', time: '' });
-
-            // Sincronização com Banco de Dados
-            useEffect(() => { if(auth) onAuthStateChanged(auth, setUser); }, []);
-
-            useEffect(() => {
-                if (!user || !db) return;
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v1');
-                const unsub = onSnapshot(docRef, (s) => {
-                    if (s.exists()) setData(prev => ({ ...initialState, ...s.data() }));
-                });
-                return () => unsub();
-            }, [user]);
-
-            useEffect(() => {
-                if (!user || !db) return;
-                setSaveStatus('saving');
-                const t = setTimeout(() => {
-                    setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v1'), data)
-                        .then(() => setSaveStatus('saved'))
-                        .catch(() => setSaveStatus('error'));
-                }, 1500);
-                return () => clearTimeout(t);
-            }, [data, user]);
-
-            // Funções de Adicionar/Remover
-            const handleInput = (f, v) => setInputs(p => ({ ...p, [f]: v }));
-            
-            const addItem = (mod, sub, item) => {
-                setData(p => ({ 
-                    ...p, 
-                    [mod]: { 
-                        ...p[mod], 
-                        [sub]: [...(p[mod][sub] || []), item] 
-                    } 
-                }));
-            };
-
-            const removeItem = (mod, sub, id) => {
-                setData(p => ({ 
-                    ...p, 
-                    [mod]: { 
-                        ...p[mod], 
-                        [sub]: p[mod][sub].filter(i => i.id !== id) 
-                    } 
-                }));
-            };
-
-            const toggleComplete = (mod, sub, id) => {
-                setData(p => ({ 
-                    ...p, 
-                    [mod]: { 
-                        ...p[mod], 
-                        [sub]: p[mod][sub].map(i => i.id === id ? { ...i, completed: !i.completed } : i) 
-                    } 
-                }));
-            };
-
-            // --- TELAS DO PLANNER ---
-            
-            const renderDaily = () => (
-                <div className="animate-fade-in">
-                    <Title subtitle="Planejamento de Hoje">Minha Rotina</Title>
-                    <Card>
-                        <div className="flex gap-2 mb-6">
-                            <input placeholder="08:00" className="w-24 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.time} onChange={e => handleInput('time', e.target.value)} />
-                            <input placeholder="Adicionar tarefa..." className="flex-1 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
-                            <button onClick={() => { if(inputs.text){ addItem('daily', 'routine', {id: Date.now(), time: inputs.time, task: inputs.text, completed:false}); setInputs({text:'', time:''}); } }} className="bg-[#804653] text-white p-3 rounded-lg hover:bg-[#683642] transition-colors"><Icon name="Plus" /></button>
-                        </div>
-                        <div className="space-y-3">
-                            {data.daily.routine.map(i => (
-                                <div key={i.id} className="flex justify-between items-center p-3 bg-white hover:bg-[#FDFBF7] border border-transparent hover:border-[#F0EAE0] rounded-lg transition-all group">
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-xs font-bold text-[#804653] w-12 font-mono">{i.time}</span>
-                                        <button onClick={() => toggleComplete('daily', 'routine', i.id)} className={`text-sm text-left ${i.completed ? 'line-through text-gray-400' : 'text-[#4A4A4A]'}`}>{i.task}</button>
-                                    </div>
-                                    <button onClick={() => removeItem('daily', 'routine', i.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity"><Icon name="Trash2" size={16}/></button>
-                                </div>
-                            ))}
-                        </div>
-                    </Card>
-                    <Card>
-                        <h3 className="serif-font text-xl mb-4 text-[#5C5C5C]">Anotações & Gratidão</h3>
-                        <textarea className="w-full h-32 bg-[#F9F7F2] p-4 rounded-lg text-sm resize-none border-none outline-none" placeholder="Escreva aqui..." value={data.daily.notes} onChange={(e) => setData(p => ({...p, daily: {...p.daily, notes: e.target.value}}))} />
-                    </Card>
-                </div>
-            );
-
-            // Botão do Menu Lateral
-            const MenuBtn = ({id, label, icon}) => (
-                <button onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 border-r-4 ${activeTab === id ? 'border-[#804653] bg-[#F5F2EB]' : 'border-transparent hover:bg-[#FCFBF8]'}`}>
-                    <div className={activeTab === id ? 'text-[#804653]' : 'text-[#A1A1A1]'}><Icon name={icon} /></div>
-                    <span className={`text-sm font-medium ${activeTab === id ? 'text-[#2C2C2C]' : 'text-[#8C8C8C]'}`}>{label}</span>
-                </button>
-            );
-
-            return (
-                <div className="min-h-screen flex flex-col md:flex-row bg-[#FDFBF7]">
-                    {/* MENU LATERAL */}
-                    <aside className={`fixed md:relative z-20 w-64 h-full bg-white border-r border-[#F0EAE0] flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                        <div className="p-8 pb-4">
-                            <h1 className="text-2xl italic text-[#2C2C2C] serif-font">Planner 2026</h1>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-[#804653] mt-2">Organização & Estilo</p>
-                        </div>
-                        <nav className="flex-1 overflow-y-auto py-4">
-                            <MenuBtn id="daily" label="Visão Diária" icon="Sun" />
-                            <MenuBtn id="weekly" label="Visão Semanal" icon="Calendar" />
-                            <MenuBtn id="goals" label="Meus Objetivos" icon="Target" />
-                            <MenuBtn id="finance" label="Financeiro" icon="DollarSign" />
-                            <MenuBtn id="home" label="Rotina da Casa" icon="Home" />
-                        </nav>
-                        <div className="p-6 border-t border-[#F0EAE0]">
-                            <div className="flex items-center gap-2 text-xs text-[#8C8C8C]">
-                                <Icon name="Cloud" size={12} className={saveStatus === 'saved' ? 'text-emerald-500' : 'text-amber-500'} /> 
-                                {saveStatus === 'saved' ? 'Sincronizado' : 'Salvando...'}
-                            </div>
-                        </div>
-                    </aside>
-
-                    {/* CABEÇALHO MOBILE */}
-                    <div className="md:hidden fixed top-0 w-full bg-white/95 backdrop-blur-sm z-10 border-b border-[#F0EAE0] px-6 py-4 flex justify-between items-center shadow-sm">
-                        <span className="serif-font text-lg text-[#2C2C2C]">Planner 2026</span>
-                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Icon name={isMobileMenuOpen ? "X" : "Menu"} /></button>
-                    </div>
-
-                    {/* CONTEÚDO PRINCIPAL */}
-                    <main className="flex-1 p-6 md:p-12 pt-24 md:pt-12 overflow-y-auto h-screen">
-                        {activeTab === 'daily' && renderDaily()}
-                        {activeTab !== 'daily' && (
-                            <div className="flex flex-col items-center justify-center h-full text-center opacity-50">
-                                <Icon name="Construction" size={48} className="text-[#D1CCC4] mb-4"/>
-                                <h3 className="serif-font text-xl text-[#5C5C5C]">Em Construção</h3>
-                                <p className="text-sm mt-2">Clique em "Visão Diária" para testar.</p>
-                            </div>
-                        )}
-                    </main>
-
-                    {/* OVERLAY MOBILE */}
-                    {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/5 z-10 md:hidden backdrop-blur-[1px]"></div>}
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+        // Mapeando os ícones específicos para usar no código original
+        const Sun = (p) => <Icon name="Sun" {...p} />;
+        const Calendar = (p) => <Icon name="Calendar" {...p} />;
+        const CalendarDays = (p) => <Icon name="CalendarDays" {...p} />;
+        const Target = (p) => <Icon name="Target" {...p} />;
+        const Briefcase = (p) => <Icon name="Briefcase" {...p} />;
+        const Heart = (p) => <Icon name="Heart" {...p} />;
+        const Users = (p) => <Icon name="Users" {...p} />;
+        const Activity = (p) => <Icon name="Activity" {...p} />;
+        const Home = (p) => <Icon name="Home" {...p} />;
+        const BookOpen = (p) => <Icon name="Book
