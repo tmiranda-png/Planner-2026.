@@ -22,7 +22,6 @@
             measurementId: "G-P8GN3GRQPE"
         });
         window.__app_id = 'planner-clean-girl-v1';
-        window.__gemini_api_key = ""; 
     </script>
 
     <style>
@@ -46,14 +45,12 @@
 
         const { useState, useEffect } = React;
 
-        // --- SISTEMA DE ÍCONES SEGURO ---
         const Icon = ({ name, size = 18, className }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
             return <i data-lucide={kebabName} className={className} style={{ width: size, height: size, display: 'inline-block' }}></i>;
         };
 
-        // --- CONFIGURAÇÃO FIREBASE ---
         const firebaseConfig = JSON.parse(window.__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -61,7 +58,6 @@
         const appId = window.__app_id;
         signInAnonymously(auth).catch(console.error);
 
-        // --- DADOS DE LEITURA ---
         const READING_PLAN_BY_MONTH = {
           "Janeiro": ["João 1–4", "João 5–8", "João 9–12", "João 13–16", "João 17–21", "Romanos 1–3", "Romanos 4–6", "Romanos 7–9", "Romanos 10–12"],
           "Fevereiro": ["1 Coríntios 1–3", "1 Coríntios 4–6", "1 Coríntios 7–9", "1 Coríntios 10–12", "Mateus 21–24"],
@@ -77,26 +73,16 @@
           "Dezembro": ["Jeremias 1–3", "Jonas 1–4"]
         };
 
-        // --- COMPONENTES UI ---
         const Title = ({ children, subtitle }) => (
-            <div className="mb-6">
-                <h2 className="text-3xl text-[#2C2C2C] font-normal italic mb-1 serif-font">{children}</h2>
-                {subtitle && <p className="text-[#8C8C8C] text-sm font-light uppercase tracking-widest">{subtitle}</p>}
-            </div>
+            <div className="mb-6"><h2 className="text-3xl text-[#2C2C2C] font-normal italic mb-1 serif-font">{children}</h2>{subtitle && <p className="text-[#8C8C8C] text-sm font-light uppercase tracking-widest">{subtitle}</p>}</div>
         );
-        const Card = ({ children, className = "" }) => (
-            <div className={`bg-white rounded-xl border border-[#F0EAE0] shadow-sm p-6 ${className}`}>{children}</div>
-        );
+        const Card = ({ children, className = "" }) => (<div className={`bg-white rounded-xl border border-[#F0EAE0] shadow-sm p-6 ${className}`}>{children}</div>);
         const Button = ({ children, onClick, variant = "primary", className = "", disabled = false }) => {
             const base = "px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2";
             const style = variant === "primary" ? "bg-[#804653] text-white hover:bg-[#683642]" : "bg-[#F5F2EB] text-[#5C5C5C]";
             return <button onClick={onClick} disabled={disabled} className={`${base} ${style} ${className}`}>{children}</button>;
         };
-        const Tag = ({ label }) => (
-            <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-md font-medium bg-[#E5E0D8] text-[#5C5C5C]">{label}</span>
-        );
 
-        // --- APP PRINCIPAL ---
         const App = () => {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('daily');
@@ -107,13 +93,12 @@
             const [currentYear] = useState(2026);
             const [inputs, setInputs] = useState({ text: '', amount: '', time: '' });
 
-            // ESTADO INICIAL COMPLETO
             const initialState = {
                 daily: { routine: [{ id: 1, time: '07:00', task: 'Acordar e Água com limão', completed: false }], notes: '' },
                 weekly: { events: [] },
                 spiritual: { completedReadingIds: [], prayerRoom: { professional: [], family: [], ministerial: [] } },
                 connectionGroup: { studies: [], discussed: [], prayers: [] },
-                health: { appointments: [], exams: [], notes: '' },
+                health: { measurements: { weightCurrent: '', weightGoal: '' }, composition: { muscle: 40, fat: 20, water: 30, bone: 10 }, appointments: [], exams: [], notes: '' },
                 home: { daily: [], weekly: [], monthly: [] },
                 reading: { current: [] },
                 finance: { transactions: [] },
@@ -121,77 +106,68 @@
                 marriage: { todo: [], gifts: [] },
                 goals: { short: [], medium: [], long: [] },
                 professional: { objectives: [], tasks: [] },
-                growthScale: { notes: [], improvements: [] }
+                growthScale: { notes: [], improvements: [] },
+                growth: { courses: [], videos: [] }
             };
 
             const [data, setData] = useState(initialState);
 
-            // Sincronização
             useEffect(() => { if(auth) onAuthStateChanged(auth, setUser); }, []);
             useEffect(() => {
                 if (!user || !db) return;
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v1_full');
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v3_final');
                 return onSnapshot(docRef, (s) => { if (s.exists()) setData(p => ({ ...initialState, ...s.data() })); });
             }, [user]);
             useEffect(() => {
                 if (!user || !db) return;
                 setSaveStatus('saving');
-                const t = setTimeout(() => setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v1_full'), data).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')), 1500);
+                const t = setTimeout(() => setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v3_final'), data).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')), 1500);
                 return () => clearTimeout(t);
             }, [data, user]);
 
-            // CRUD
             const handleInput = (f, v) => setInputs(p => ({ ...p, [f]: v }));
             const addItem = (mod, sub, item) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: [...(p[mod][sub]||[]), item] } }));
             const removeItem = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].filter(i => i.id !== id) } }));
             const toggleComplete = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].map(i => i.id === id ? { ...i, completed: !i.completed } : i) } }));
 
-            // --- RENDERIZADORES ---
-            
-            const renderDailyView = () => (
-                <div className="animate-fade-in space-y-6">
-                    <Title subtitle="Planejamento de Hoje">Minha Rotina</Title>
-                    <Card>
-                        <div className="flex gap-2 mb-6">
-                            <input placeholder="08:00" className="w-24 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.time} onChange={e => handleInput('time', e.target.value)} />
-                            <input placeholder="Adicionar tarefa..." className="flex-1 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
-                            <button onClick={() => { if(inputs.text){ addItem('daily', 'routine', {id: Date.now(), time: inputs.time, task: inputs.text, completed:false}); setInputs({text:'', time:''}); } }} className="bg-[#804653] text-white p-3 rounded-lg hover:bg-[#683642]"><Icon name="Plus" /></button>
-                        </div>
-                        <div className="space-y-3">
-                            {data.daily.routine.sort((a,b)=>a.time.localeCompare(b.time)).map(i => (
-                                <div key={i.id} className="flex justify-between items-center p-3 bg-white hover:bg-[#FDFBF7] border border-transparent hover:border-[#F0EAE0] rounded-lg group">
-                                    <div className="flex gap-4 items-center">
-                                        <span className="text-xs font-bold text-[#804653] w-12">{i.time}</span>
-                                        <button onClick={() => toggleComplete('daily', 'routine', i.id)} className={`text-sm ${i.completed ? 'line-through text-gray-400' : ''}`}>{i.task}</button>
-                                    </div>
-                                    <button onClick={() => removeItem('daily', 'routine', i.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400"><Icon name="Trash2" size={16}/></button>
-                                </div>
-                            ))}
-                        </div>
-                    </Card>
-                    <Card><h3 className="serif-font text-xl mb-4 text-[#5C5C5C]">Notas</h3><textarea className="w-full h-32 bg-[#F9F7F2] p-4 rounded-lg text-sm resize-none outline-none" value={data.daily.notes} onChange={(e) => setData(p => ({...p, daily: {...p.daily, notes: e.target.value}}))} /></Card>
-                </div>
-            );
+            // --- VISTAS COM ITENS PRÉ-PRONTOS ---
 
-            const renderWeeklyView = () => {
-                const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+            const renderHomeView = () => {
+                const predefinedTasks = [
+                    { icon: 'Bed', text: 'Arrumar Cama' }, { icon: 'Eraser', text: 'Varrer' },
+                    { icon: 'Droplets', text: 'Louça' }, { icon: 'Shirt', text: 'Roupa' },
+                    { icon: 'Bath', text: 'Banheiro' }, { icon: 'ShoppingBag', text: 'Mercado' },
+                    { icon: 'Utensils', text: 'Marmitas' }, { icon: 'Flower', text: 'Plantas' }
+                ];
                 return (
-                    <div className="animate-fade-in">
-                        <Title subtitle="Visão Macro">Semanal</Title>
-                        <div className="grid grid-cols-7 gap-2 overflow-x-auto pb-4">
-                            {days.map(day => (
-                                <div key={day} className="min-w-[140px] bg-white rounded-xl border border-[#F0EAE0] p-3 flex flex-col h-[500px]">
-                                    <div className="text-center serif-font text-[#804653] pb-2 mb-2 border-b border-[#F0EAE0]">{day}</div>
-                                    <div className="flex-1 overflow-y-auto space-y-2">
-                                        {data.weekly.events.filter(e => e.day === day).map(evt => (
-                                            <div key={evt.id} className="bg-[#FDFBF7] p-2 rounded border border-[#F5F2EB] text-xs relative group">
-                                                <p>{evt.text}</p>
-                                                <button onClick={() => removeItem('weekly', 'events', evt.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100"><Icon name="X" size={10}/></button>
+                    <div className="animate-fade-in space-y-6">
+                        <Title subtitle="Lar">Rotina da Casa</Title>
+                        {/* ATALHOS RÁPIDOS */}
+                        <div className="bg-[#FAF9F6] p-4 rounded-xl border border-[#F0EAE0] mb-4">
+                            <p className="text-xs uppercase tracking-widest text-[#8C8C8C] mb-3">Adicionar Rapidamente</p>
+                            <div className="flex flex-wrap gap-3">
+                                {predefinedTasks.map((t, idx) => (
+                                    <button key={idx} onClick={() => addItem('home', 'daily', { id: Date.now(), text: t.text, completed: false })} className="bg-white border border-[#E5E0D8] px-3 py-2 rounded-lg text-sm hover:border-[#804653] hover:text-[#804653] flex gap-2 items-center">
+                                        <Icon name={t.icon} size={14}/> {t.text}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {['daily', 'weekly', 'monthly'].map(p => (
+                                <Card key={p}>
+                                    <h3 className="serif-font capitalize mb-4">{p === 'daily' ? 'Diário' : p === 'weekly' ? 'Semanal' : 'Mensal'}</h3>
+                                    <input className="w-full text-xs p-2 bg-[#F9F7F2] rounded mb-4" placeholder="+ Tarefa" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem('home', p, { id: Date.now(), text: e.target.value, completed: false }); e.target.value = ''; } }} />
+                                    <div className="space-y-2">
+                                        {data.home[p].map(t => (
+                                            <div key={t.id} className="flex items-center gap-2 group">
+                                                <button onClick={() => toggleComplete('home', p, t.id)} className={`w-4 h-4 rounded-full border ${t.completed ? 'bg-[#D1CCC4]' : ''}`}></button>
+                                                <span className={`text-sm ${t.completed ? 'line-through text-gray-300' : ''}`}>{t.text}</span>
+                                                <button onClick={() => removeItem('home', p, t.id)} className="ml-auto opacity-0 group-hover:opacity-100"><Icon name="X" size={12}/></button>
                                             </div>
                                         ))}
                                     </div>
-                                    <button onClick={() => { const t = prompt("Tarefa:"); if(t) addItem('weekly', 'events', {id: Date.now(), day, text: t}); }} className="mt-2 text-xs text-[#804653] hover:underline">+ Add</button>
-                                </div>
+                                </Card>
                             ))}
                         </div>
                     </div>
@@ -200,12 +176,23 @@
 
             const renderFinanceView = () => {
                 const total = data.finance.transactions.reduce((acc, t) => acc + (t.type === 'income' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
+                const commonExpenses = ['Aluguel', 'Luz', 'Internet', 'Mercado', 'Lazer', 'Assinaturas', 'Dízimo', 'Combustível'];
+                
                 return (
                     <div className="animate-fade-in space-y-6">
                         <Title subtitle="Recursos">Financeiro</Title>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <Card className="md:col-span-2">
                                 <div className="text-4xl serif-font mb-6 text-[#804653]">R$ {total.toFixed(2)}</div>
+                                {/* ATALHOS DE DESPESAS */}
+                                <div className="mb-4">
+                                    <p className="text-[10px] text-[#8C8C8C] uppercase mb-2">Preencher Rápido</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {commonExpenses.map(exp => (
+                                            <button key={exp} onClick={() => setInputs(p => ({ ...p, text: exp }))} className="px-2 py-1 bg-[#F9F7F2] text-xs text-[#5C5C5C] rounded border border-[#E5E0D8] hover:bg-[#EBE5DB]">{exp}</button>
+                                        ))}
+                                    </div>
+                                </div>
                                 <div className="flex gap-2 mb-4">
                                     <input className="flex-1 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="Descrição" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
                                     <input className="w-24 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="R$" type="number" value={inputs.amount} onChange={e => handleInput('amount', e.target.value)} />
@@ -227,36 +214,105 @@
                 );
             };
 
-            const GenericListView = ({ module, title, cols, icon }) => (
-                <div className="animate-fade-in space-y-6">
-                    <Title subtitle="Lista">{title}</Title>
-                    <div className="flex gap-4 overflow-x-auto pb-4">
-                        {cols.map(col => (
-                            <div key={col.id} className="min-w-[250px] bg-white rounded-xl border border-[#F0EAE0] p-4 flex flex-col h-[500px]">
-                                <h4 className="serif-font text-[#804653] border-b border-[#F0EAE0] pb-2 mb-3 flex items-center gap-2"><Icon name={icon} size={14}/> {col.label}</h4>
-                                <div className="flex-1 overflow-y-auto space-y-2">
-                                    {(data[module][col.id] || []).map(item => (
-                                        <div key={item.id} className="bg-[#F9F7F2] p-3 rounded shadow-sm text-sm text-[#4A4A4A] group relative">
-                                            {item.text}
-                                            <button onClick={() => removeItem(module, col.id, item.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[#D1CCC4]"><Icon name="X" size={12}/></button>
-                                        </div>
-                                    ))}
+            const renderWeeklyView = () => {
+                const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+                const tags = ['Estudar', 'Trabalhar', 'Devocional', 'Treino', 'Lazer'];
+                return (
+                    <div className="animate-fade-in">
+                        <Title subtitle="Visão Macro">Semanal</Title>
+                        <div className="grid grid-cols-7 gap-2 overflow-x-auto pb-4">
+                            {days.map(day => (
+                                <div key={day} className="min-w-[140px] bg-white rounded-xl border border-[#F0EAE0] p-3 flex flex-col h-[500px]">
+                                    <div className="text-center serif-font text-[#804653] pb-2 mb-2 border-b border-[#F0EAE0]">{day}</div>
+                                    <div className="flex-1 overflow-y-auto space-y-2">
+                                        {data.weekly.events.filter(e => e.day === day).map(evt => (
+                                            <div key={evt.id} className="bg-[#FDFBF7] p-2 rounded border border-[#F5F2EB] text-xs relative group">
+                                                <div className="text-[9px] uppercase tracking-wide text-[#804653] bg-[#F2DCD6] px-1 rounded inline-block mb-1">{evt.tag}</div>
+                                                <p>{evt.text}</p>
+                                                <button onClick={() => removeItem('weekly', 'events', evt.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100"><Icon name="X" size={10}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* SELETOR DE TAGS */}
+                                    <select className="w-full mt-2 text-xs bg-transparent border-t border-[#E5E0D8] pt-1" onChange={(e) => { const t = prompt("Tarefa:"); if(t) addItem('weekly', 'events', {id: Date.now(), day, tag: e.target.value, text: t}); e.target.value=""; }}>
+                                        <option value="">+ Adicionar</option>
+                                        {tags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                                    </select>
                                 </div>
-                                <input className="mt-2 bg-[#F5F2EB] p-2 rounded text-xs w-full outline-none" placeholder="+ Adicionar" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem(module, col.id, { id: Date.now(), text: e.target.value }); e.target.value = ''; } }} />
-                            </div>
-                        ))}
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- VISTAS PADRÃO (Saúde, Leitura, etc.) ---
+            const renderHealthView = () => {
+                const { muscle, fat, water, bone } = data.health.composition;
+                const createArc = (start, end, color) => {
+                    const r=40, cx=50, cy=50;
+                    const startA = (start/100)*2*Math.PI, endA = (end/100)*2*Math.PI;
+                    const x1 = cx + r*Math.cos(startA), y1 = cy + r*Math.sin(startA);
+                    const x2 = cx + r*Math.cos(endA), y2 = cy + r*Math.sin(endA);
+                    const large = end - start > 50 ? 1 : 0;
+                    return <path d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`} fill={color} />;
+                };
+                return (
+                    <div className="animate-fade-in space-y-6">
+                        <Title subtitle="Bem-estar">Saúde</Title>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Card>
+                                <h3 className="serif-font text-[#804653] mb-4">Composição</h3>
+                                <div className="flex gap-8 items-center">
+                                    <div className="w-32 h-32 relative"><svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">{createArc(0, muscle, '#804653')}{createArc(muscle, muscle+fat, '#F2DCD6')}{createArc(muscle+fat, muscle+fat+water, '#E0E8E4')}{createArc(muscle+fat+water, 100, '#E5E0D8')}</svg></div>
+                                    <div className="space-y-2 text-xs"><div className="flex gap-2"><div className="w-3 h-3 bg-[#804653] rounded"/> Músculo ({muscle}%)</div><div className="flex gap-2"><div className="w-3 h-3 bg-[#F2DCD6] rounded"/> Gordura ({fat}%)</div><div className="flex gap-2"><div className="w-3 h-3 bg-[#E0E8E4] rounded"/> Água ({water}%)</div></div>
+                                </div>
+                                <div className="grid grid-cols-4 gap-2 mt-4">{['muscle', 'fat', 'water', 'bone'].map(k => (<input key={k} type="number" className="w-full bg-[#F9F7F2] p-1 text-center text-xs rounded" value={data.health.composition[k]} onChange={e => setData(p => ({...p, health: {...p.health, composition: {...p.health.composition, [k]: Number(e.target.value)}}}) )} />))}</div>
+                            </Card>
+                            <Card>
+                                <h3 className="serif-font text-[#804653] mb-4">Consultas</h3>
+                                <div className="space-y-2 mb-4">{(data.health.appointments || []).map(a => (<div key={a.id} className="flex justify-between text-sm bg-[#F9F7F2] p-2 rounded">{a.text}<button onClick={()=>removeItem('health','appointments',a.id)}><Icon name="X" size={12}/></button></div>))}</div>
+                                <input className="w-full text-xs p-2 bg-[#F5F2EB] rounded" placeholder="+ Nova Consulta" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem('health', 'appointments', {id: Date.now(), text: e.target.value}); e.target.value=''; } }} />
+                            </Card>
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderReadingView = () => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Biblioteca">Leitura</Title>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="flex flex-col justify-center text-center bg-[#FAF9F6]"><Icon name="BookOpen" className="mx-auto text-[#804653] mb-2" size={24}/><div className="text-3xl serif-font">{data.reading.current.reduce((acc, b) => acc + (parseInt(b.pagesRead)||0), 0)}</div><span className="text-xs uppercase text-gray-400">Páginas Lidas</span></Card>
+                        <Card className="md:col-span-2">
+                             <div className="flex gap-2 mb-4"><input className="flex-1 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="Título" value={inputs.text} onChange={e=>handleInput('text',e.target.value)}/><input className="w-20 p-2 bg-[#F9F7F2] rounded text-sm" type="number" placeholder="Pág." value={inputs.amount} onChange={e=>handleInput('amount',e.target.value)}/><Button onClick={()=>{if(inputs.text){addItem('reading','current',{id:Date.now(), title:inputs.text, total:parseInt(inputs.amount)||100, pagesRead:0}); setInputs({text:'', amount:''})}}}>Add</Button></div>
+                             <div className="space-y-4">{data.reading.current.map(b => (<div key={b.id} className="bg-[#F9F7F2] p-3 rounded"><div className="flex justify-between mb-2"><span className="font-serif">{b.title}</span><button onClick={()=>removeItem('reading','current',b.id)}><Icon name="Trash2" size={14}/></button></div><div className="flex items-center gap-2"><input type="range" max={b.total} value={b.pagesRead} onChange={(e)=>{const val = parseInt(e.target.value); setData(p=>({...p, reading: {...p.reading, current: p.reading.current.map(x=>x.id===b.id ? {...x, pagesRead:val} : x)}}))}} className="flex-1 h-1 bg-gray-200 rounded-lg accent-[#804653]"/><span className="text-xs w-16 text-right">{b.pagesRead} / {b.total}</span></div></div>))}</div>
+                        </Card>
                     </div>
                 </div>
             );
 
-            // RENDERIZADORES GENÉRICOS (Para economizar espaço e funcionar tudo)
-            const renderProfessionalView = () => <GenericListView module="professional" title="Profissional" icon="Briefcase" cols={[{id:'objectives', label:'Objetivos'}, {id:'tasks', label:'Tarefas'}]} />;
-            const renderConnectionGroupView = () => <GenericListView module="connectionGroup" title="Grupo de Conexão" icon="Users" cols={[{id:'studies', label:'Estudos'}, {id:'discussed', label:'Discutido'}]} />;
-            const renderGrowthScaleView = () => <GenericListView module="growthScale" title="Escola do Crescimento" icon="GraduationCap" cols={[{id:'notes', label:'Notas'}, {id:'improvements', label:'Melhorias'}]} />;
-            const renderWishlistView = () => <GenericListView module="wishlist" title="Lista de Desejos" icon="Gift" cols={[{id:'home', label:'Casa'}, {id:'personal', label:'Pessoal'}]} />;
-            const renderMarriageView = () => <GenericListView module="marriage" title="Casamento" icon="HeartHandshake" cols={[{id:'todo', label:'Fazer Juntos'}, {id:'gifts', label:'Presentes'}]} />;
-            const renderGoalsView = () => <GenericListView module="goals" title="Objetivos" icon="Target" cols={[{id:'short', label:'Curto Prazo'}, {id:'medium', label:'Médio Prazo'}, {id:'long', label:'Longo Prazo'}]} />;
-            const renderHomeView = () => <GenericListView module="home" title="Rotina da Casa" icon="Home" cols={[{id:'daily', label:'Diário'}, {id:'weekly', label:'Semanal'}, {id:'monthly', label:'Mensal'}]} />;
+            const renderGrowthView = () => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Evolução">Crescimento</Title>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card><h3 className="serif-font text-[#804653] mb-4 flex items-center gap-2"><Icon name="PenTool" size={16}/> Cursos</h3><input className="w-full text-xs p-2 bg-[#F9F7F2] rounded mb-3" placeholder="+ Adicionar" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem('growth', 'courses', {id: Date.now(), text: e.target.value}); e.target.value=''; } }} /><ul className="space-y-2 list-disc pl-4 marker:text-[#804653]">{data.growth.courses.map(c => (<li key={c.id} className="text-sm flex justify-between group">{c.text} <button onClick={()=>removeItem('growth','courses',c.id)} className="opacity-0 group-hover:opacity-100"><Icon name="X" size={12}/></button></li>))}</ul></Card>
+                        <Card><h3 className="serif-font text-[#804653] mb-4 flex items-center gap-2"><Icon name="Youtube" size={16}/> Vídeos</h3><input className="w-full text-xs p-2 bg-[#F9F7F2] rounded mb-3" placeholder="+ Adicionar" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem('growth', 'videos', {id: Date.now(), text: e.target.value}); e.target.value=''; } }} /><div className="space-y-2">{data.growth.videos.map(v => (<div key={v.id} className="text-sm bg-[#F9F7F2] p-2 rounded flex justify-between group"><span className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-red-400 rounded-full"/> {v.text}</span><button onClick={()=>removeItem('growth','videos',v.id)} className="opacity-0 group-hover:opacity-100"><Icon name="X" size={12}/></button></div>))}</div></Card>
+                    </div>
+                </div>
+            );
+
+            const renderDailyView = () => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Planejamento de Hoje">Minha Rotina</Title>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="md:col-span-2">
+                            <div className="flex gap-2 mb-6"><input placeholder="08:00" className="w-24 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.time} onChange={e => handleInput('time', e.target.value)} /><input placeholder="Adicionar tarefa..." className="flex-1 p-3 bg-[#F9F7F2] rounded-lg text-sm border-none outline-none" value={inputs.text} onChange={e => handleInput('text', e.target.value)} /><button onClick={() => { if(inputs.text){ addItem('daily', 'routine', {id: Date.now(), time: inputs.time, task: inputs.text, completed:false}); setInputs(p=>({...p, text:'', time:''})); } }} className="bg-[#804653] text-white p-3 rounded-lg hover:bg-[#683642]"><Icon name="Plus" /></button></div>
+                            <div className="space-y-3">{data.daily.routine.sort((a,b)=>a.time.localeCompare(b.time)).map(i => (<div key={i.id} className="flex justify-between items-center p-3 bg-white hover:bg-[#FDFBF7] border border-transparent hover:border-[#F0EAE0] rounded-lg group"><div className="flex gap-4 items-center"><span className="text-xs font-bold text-[#804653] w-12">{i.time}</span><button onClick={() => toggleComplete('daily', 'routine', i.id)} className={`text-sm ${i.completed ? 'line-through text-gray-400' : ''}`}>{i.task}</button></div><button onClick={() => removeItem('daily', 'routine', i.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400"><Icon name="Trash2" size={16}/></button></div>))}</div>
+                        </Card>
+                        <Card><h3 className="serif-font text-xl mb-4 text-[#5C5C5C]">Notas</h3><textarea className="w-full h-32 bg-[#F9F7F2] p-4 rounded-lg text-sm resize-none outline-none" value={data.daily.notes} onChange={(e) => setData(p => ({...p, daily: {...p.daily, notes: e.target.value}}))} /></Card>
+                    </div>
+                </div>
+            );
 
             const renderSpiritualView = () => (
                 <div className="animate-fade-in space-y-6">
@@ -268,23 +324,7 @@
                     {spiritualTab === 'reading' ? (
                         <div className="space-y-4">
                             {Object.entries(READING_PLAN_BY_MONTH).map(([month, readings]) => (
-                                <Card key={month}>
-                                    <h4 className="serif-font mb-3">{month}</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                        {readings.map((r, i) => {
-                                            const id = `${month}-${i}`;
-                                            const done = (data.spiritual.completedReadingIds||[]).includes(id);
-                                            return (
-                                                <div key={i} onClick={()=>{
-                                                    const list = data.spiritual.completedReadingIds || [];
-                                                    setData(p=>({...p, spiritual: {...p.spiritual, completedReadingIds: done ? list.filter(x=>x!==id) : [...list, id]}}))
-                                                }} className={`text-xs p-2 rounded cursor-pointer border ${done ? 'bg-[#804653] text-white border-[#804653]' : 'border-[#E5E0D8]'}`}>
-                                                    {r}
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                </Card>
+                                <Card key={month}><h4 className="serif-font mb-3">{month}</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-2">{readings.map((r, i) => {const id = `${month}-${i}`;const done = (data.spiritual.completedReadingIds||[]).includes(id);return (<div key={i} onClick={()=>{const list = data.spiritual.completedReadingIds || [];setData(p=>({...p, spiritual: {...p.spiritual, completedReadingIds: done ? list.filter(x=>x!==id) : [...list, id]}}))}} className={`text-xs p-2 rounded cursor-pointer border ${done ? 'bg-[#804653] text-white border-[#804653]' : 'border-[#E5E0D8]'}`}>{r}</div>)})}</div></Card>
                             ))}
                         </div>
                     ) : (
@@ -297,20 +337,25 @@
                 <div className="animate-fade-in">
                     <Title subtitle="Agenda">Calendário {currentYear}</Title>
                     <Card>
-                        <div className="flex justify-between items-center mb-6">
-                             <button onClick={() => setCurrentMonth(p => Math.max(0, p - 1))}><Icon name="ChevronRight" className="rotate-180"/></button>
-                             <h3 className="serif-font text-2xl capitalize">{new Date(currentYear, currentMonth).toLocaleString('pt-BR', {month:'long'})}</h3>
-                             <button onClick={() => setCurrentMonth(p => Math.min(11, p + 1))}><Icon name="ChevronRight"/></button>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 h-96">
-                            {Array.from({length: new Date(currentYear, currentMonth, 1).getDay()}).map((_,i)=><div key={i}/>)}
-                            {Array.from({length: new Date(currentYear, currentMonth+1, 0).getDate()}).map((_,i)=>(
-                                <div key={i} className="border border-[#F0EAE0] p-1 text-sm bg-[#FDFBF7] hover:bg-white transition-colors">{i+1}</div>
-                            ))}
-                        </div>
+                        <div className="flex justify-between items-center mb-6"><button onClick={() => setCurrentMonth(p => Math.max(0, p - 1))}><Icon name="ChevronRight" className="rotate-180"/></button><h3 className="serif-font text-2xl capitalize">{new Date(currentYear, currentMonth).toLocaleString('pt-BR', {month:'long'})}</h3><button onClick={() => setCurrentMonth(p => Math.min(11, p + 1))}><Icon name="ChevronRight"/></button></div>
+                        <div className="grid grid-cols-7 gap-1 h-96">{Array.from({length: new Date(currentYear, currentMonth, 1).getDay()}).map((_,i)=><div key={i}/>)}{Array.from({length: new Date(currentYear, currentMonth+1, 0).getDate()}).map((_,i)=>(<div key={i} className="border border-[#F0EAE0] p-1 text-sm bg-[#FDFBF7] hover:bg-white transition-colors">{i+1}</div>))}</div>
                     </Card>
                 </div>
             );
+
+            const GenericListView = ({ module, title, cols, icon }) => (
+                <div className="animate-fade-in space-y-6">
+                    <Title subtitle="Lista">{title}</Title>
+                    <div className="flex gap-4 overflow-x-auto pb-4">{cols.map(col => (<div key={col.id} className="min-w-[250px] bg-white rounded-xl border border-[#F0EAE0] p-4 flex flex-col h-[500px]"><h4 className="serif-font text-[#804653] border-b border-[#F0EAE0] pb-2 mb-3 flex items-center gap-2"><Icon name={icon} size={14}/> {col.label}</h4><div className="flex-1 overflow-y-auto space-y-2">{(data[module][col.id] || []).map(item => (<div key={item.id} className="bg-[#F9F7F2] p-3 rounded shadow-sm text-sm text-[#4A4A4A] group relative">{item.text}<button onClick={() => removeItem(module, col.id, item.id)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[#D1CCC4]"><Icon name="X" size={12}/></button></div>))}</div><input className="mt-2 bg-[#F5F2EB] p-2 rounded text-xs w-full outline-none" placeholder="+ Adicionar" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem(module, col.id, { id: Date.now(), text: e.target.value }); e.target.value = ''; } }} /></div>))}</div>
+                </div>
+            );
+
+            const renderProfessionalView = () => <GenericListView module="professional" title="Profissional" icon="Briefcase" cols={[{id:'objectives', label:'Objetivos'}, {id:'tasks', label:'Tarefas'}]} />;
+            const renderConnectionGroupView = () => <GenericListView module="connectionGroup" title="Grupo de Conexão" icon="Users" cols={[{id:'studies', label:'Estudos'}, {id:'discussed', label:'Discutido'}]} />;
+            const renderGrowthScaleView = () => <GenericListView module="growthScale" title="Escola do Crescimento" icon="GraduationCap" cols={[{id:'notes', label:'Notas'}, {id:'improvements', label:'Melhorias'}]} />;
+            const renderWishlistView = () => <GenericListView module="wishlist" title="Lista de Desejos" icon="Gift" cols={[{id:'home', label:'Casa'}, {id:'personal', label:'Pessoal'}]} />;
+            const renderMarriageView = () => <GenericListView module="marriage" title="Casamento" icon="HeartHandshake" cols={[{id:'todo', label:'Fazer Juntos'}, {id:'gifts', label:'Presentes'}]} />;
+            const renderGoalsView = () => <GenericListView module="goals" title="Objetivos" icon="Target" cols={[{id:'short', label:'Curto Prazo'}, {id:'medium', label:'Médio Prazo'}, {id:'long', label:'Longo Prazo'}]} />;
 
             const MenuBtn = ({id, label, icon}) => (
                 <button onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 border-r-4 ${activeTab === id ? 'border-[#804653] bg-[#F5F2EB]' : 'border-transparent hover:bg-[#FCFBF8]'}`}>
@@ -322,10 +367,7 @@
             return (
                 <div className="min-h-screen flex flex-col md:flex-row bg-[#FDFBF7]">
                     <aside className={`fixed md:relative z-20 w-64 h-full bg-white border-r border-[#F0EAE0] flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                        <div className="p-8 pb-4">
-                            <h1 className="text-2xl italic text-[#2C2C2C] serif-font">Planner 2026</h1>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-[#804653] mt-2">Organização & Estilo</p>
-                        </div>
+                        <div className="p-8 pb-4"><h1 className="serif-font text-2xl italic text-[#2C2C2C]">Planner 2026</h1><p className="text-[10px] uppercase tracking-[0.2em] text-[#804653] mt-2">Organização & Estilo</p></div>
                         <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
                             <MenuBtn id="daily" label="Visão Diária" icon="Sun" />
                             <MenuBtn id="weekly" label="Visão Semanal" icon="Calendar" />
@@ -336,18 +378,16 @@
                             <MenuBtn id="connectionGroup" label="Grupo de Conexão" icon="Users" />
                             <MenuBtn id="home" label="Rotina da Casa" icon="Home" />
                             <MenuBtn id="finance" label="Financeiro" icon="DollarSign" />
+                            <MenuBtn id="health" label="Saúde & Bem-estar" icon="Activity" />
+                            <MenuBtn id="reading" label="Leitura" icon="BookOpen" />
+                            <MenuBtn id="growth" label="Crescimento" icon="TrendingUp" />
                             <MenuBtn id="wishlist" label="Desejos" icon="Gift" />
                             <MenuBtn id="marriage" label="Casamento" icon="HeartHandshake" />
                             <MenuBtn id="growthScale" label="Escola Crescimento" icon="GraduationCap" />
                         </nav>
                         <div className="p-6 border-t border-[#F0EAE0]"><div className="flex items-center gap-2 text-xs text-[#8C8C8C]"><Icon name="Cloud" size={12} className={saveStatus === 'saved' ? 'text-emerald-500' : 'text-amber-500'} /> {saveStatus === 'saved' ? 'Sincronizado' : 'Salvando...'}</div></div>
                     </aside>
-
-                    <div className="md:hidden fixed top-0 w-full bg-white/95 backdrop-blur-sm z-10 border-b border-[#F0EAE0] px-6 py-4 flex justify-between items-center shadow-sm">
-                        <span className="serif-font text-lg text-[#2C2C2C]">Planner 2026</span>
-                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Icon name={isMobileMenuOpen ? "X" : "Menu"} /></button>
-                    </div>
-
+                    <div className="md:hidden fixed top-0 w-full bg-white/95 backdrop-blur-sm z-10 border-b border-[#F0EAE0] px-6 py-4 flex justify-between items-center shadow-sm"><span className="serif-font text-lg text-[#2C2C2C]">Planner 2026</span><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}><Icon name={isMobileMenuOpen ? "X" : "Menu"} /></button></div>
                     <main className="flex-1 p-6 md:p-12 pt-24 md:pt-12 overflow-y-auto h-screen">
                         {activeTab === 'daily' && renderDailyView()}
                         {activeTab === 'weekly' && renderWeeklyView()}
@@ -356,13 +396,15 @@
                         {activeTab === 'home' && renderHomeView()}
                         {activeTab === 'professional' && renderProfessionalView()}
                         {activeTab === 'connectionGroup' && renderConnectionGroupView()}
+                        {activeTab === 'health' && renderHealthView()}
+                        {activeTab === 'reading' && renderReadingView()}
+                        {activeTab === 'growth' && renderGrowthView()}
                         {activeTab === 'growthScale' && renderGrowthScaleView()}
                         {activeTab === 'wishlist' && renderWishlistView()}
                         {activeTab === 'marriage' && renderMarriageView()}
                         {activeTab === 'spiritual' && renderSpiritualView()}
                         {activeTab === 'calendar' && renderCalendarView()}
                     </main>
-
                     {isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/5 z-10 md:hidden backdrop-blur-[1px]"></div>}
                 </div>
             );
