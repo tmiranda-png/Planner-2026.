@@ -96,17 +96,17 @@
             const initialState = {
                 daily: { routine: [{ id: 1, time: '07:00', task: 'Acordar e Água com limão', completed: false }], notes: '' },
                 weekly: { events: [] },
-                spiritual: { completedReadingIds: [], prayerRoom: { professional: [], family: [], ministerial: [] } },
-                connectionGroup: { studies: [], discussed: [], prayers: [] },
+                spiritual: { completedReadingIds: [], prayerRoom: { professional: [], family: [], ministerial: [], spiritual: [], love: [], studies: [] } },
+                connectionGroup: { studies: [], discussed: [], doubts: [], suggestions: [], readingSuggestions: [], topics: [] },
                 health: { measurements: { weightCurrent: '', weightGoal: '' }, composition: { muscle: 40, fat: 20, water: 30, bone: 10 }, appointments: [], exams: [], notes: '' },
                 home: { daily: [], weekly: [], monthly: [] },
                 reading: { current: [] },
                 finance: { transactions: [] },
-                wishlist: { home: [], personal: [] },
-                marriage: { todo: [], gifts: [] },
+                wishlist: { home: [], personal: [], health: [], wedding: [] },
+                marriage: { schedule: [], todoTogether: [], holidays: [], ourDay15: [], gifts: [], tips: [] },
                 goals: { short: [], medium: [], long: [] },
-                professional: { objectives: [], tasks: [] },
-                growthScale: { notes: [], improvements: [] },
+                professional: { objectives: [], study: [], important: [], meeting: [], supervisor: [] },
+                growthScale: { notes: [], improvements: [], teachers: [], changes: [], prayers: [], futurePlans: [] },
                 growth: { courses: [], videos: [] }
             };
 
@@ -115,13 +115,13 @@
             useEffect(() => { if(auth) onAuthStateChanged(auth, setUser); }, []);
             useEffect(() => {
                 if (!user || !db) return;
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v3_final');
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v5_ultimate');
                 return onSnapshot(docRef, (s) => { if (s.exists()) setData(p => ({ ...initialState, ...s.data() })); });
             }, [user]);
             useEffect(() => {
                 if (!user || !db) return;
                 setSaveStatus('saving');
-                const t = setTimeout(() => setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v3_final'), data).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')), 1500);
+                const t = setTimeout(() => setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'planner_data', 'v5_ultimate'), data).then(() => setSaveStatus('saved')).catch(() => setSaveStatus('error')), 1500);
                 return () => clearTimeout(t);
             }, [data, user]);
 
@@ -130,7 +130,7 @@
             const removeItem = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].filter(i => i.id !== id) } }));
             const toggleComplete = (mod, sub, id) => setData(p => ({ ...p, [mod]: { ...p[mod], [sub]: p[mod][sub].map(i => i.id === id ? { ...i, completed: !i.completed } : i) } }));
 
-            // --- VISTAS COM ITENS PRÉ-PRONTOS ---
+            // --- RENDERIZADORES ESPECIAIS (COM BOTÕES RÁPIDOS) ---
 
             const renderHomeView = () => {
                 const predefinedTasks = [
@@ -142,12 +142,11 @@
                 return (
                     <div className="animate-fade-in space-y-6">
                         <Title subtitle="Lar">Rotina da Casa</Title>
-                        {/* ATALHOS RÁPIDOS */}
                         <div className="bg-[#FAF9F6] p-4 rounded-xl border border-[#F0EAE0] mb-4">
                             <p className="text-xs uppercase tracking-widest text-[#8C8C8C] mb-3">Adicionar Rapidamente</p>
                             <div className="flex flex-wrap gap-3">
                                 {predefinedTasks.map((t, idx) => (
-                                    <button key={idx} onClick={() => addItem('home', 'daily', { id: Date.now(), text: t.text, completed: false })} className="bg-white border border-[#E5E0D8] px-3 py-2 rounded-lg text-sm hover:border-[#804653] hover:text-[#804653] flex gap-2 items-center">
+                                    <button key={idx} onClick={() => addItem('home', 'daily', { id: Date.now(), text: t.text, completed: false })} className="bg-white border border-[#E5E0D8] px-3 py-2 rounded-lg text-sm hover:border-[#804653] hover:text-[#804653] flex gap-2 items-center transition-all">
                                         <Icon name={t.icon} size={14}/> {t.text}
                                     </button>
                                 ))}
@@ -157,7 +156,7 @@
                             {['daily', 'weekly', 'monthly'].map(p => (
                                 <Card key={p}>
                                     <h3 className="serif-font capitalize mb-4">{p === 'daily' ? 'Diário' : p === 'weekly' ? 'Semanal' : 'Mensal'}</h3>
-                                    <input className="w-full text-xs p-2 bg-[#F9F7F2] rounded mb-4" placeholder="+ Tarefa" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem('home', p, { id: Date.now(), text: e.target.value, completed: false }); e.target.value = ''; } }} />
+                                    <input className="w-full text-xs p-2 bg-[#F9F7F2] rounded mb-4 outline-none" placeholder="+ Tarefa" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value) { addItem('home', p, { id: Date.now(), text: e.target.value, completed: false }); e.target.value = ''; } }} />
                                     <div className="space-y-2">
                                         {data.home[p].map(t => (
                                             <div key={t.id} className="flex items-center gap-2 group">
@@ -177,25 +176,23 @@
             const renderFinanceView = () => {
                 const total = data.finance.transactions.reduce((acc, t) => acc + (t.type === 'income' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
                 const commonExpenses = ['Aluguel', 'Luz', 'Internet', 'Mercado', 'Lazer', 'Assinaturas', 'Dízimo', 'Combustível'];
-                
                 return (
                     <div className="animate-fade-in space-y-6">
                         <Title subtitle="Recursos">Financeiro</Title>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <Card className="md:col-span-2">
                                 <div className="text-4xl serif-font mb-6 text-[#804653]">R$ {total.toFixed(2)}</div>
-                                {/* ATALHOS DE DESPESAS */}
                                 <div className="mb-4">
                                     <p className="text-[10px] text-[#8C8C8C] uppercase mb-2">Preencher Rápido</p>
                                     <div className="flex flex-wrap gap-2">
                                         {commonExpenses.map(exp => (
-                                            <button key={exp} onClick={() => setInputs(p => ({ ...p, text: exp }))} className="px-2 py-1 bg-[#F9F7F2] text-xs text-[#5C5C5C] rounded border border-[#E5E0D8] hover:bg-[#EBE5DB]">{exp}</button>
+                                            <button key={exp} onClick={() => setInputs(p => ({ ...p, text: exp }))} className="px-2 py-1 bg-[#F9F7F2] text-xs text-[#5C5C5C] rounded border border-[#E5E0D8] hover:bg-[#EBE5DB] transition-all">{exp}</button>
                                         ))}
                                     </div>
                                 </div>
                                 <div className="flex gap-2 mb-4">
-                                    <input className="flex-1 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="Descrição" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
-                                    <input className="w-24 p-2 bg-[#F9F7F2] rounded text-sm" placeholder="R$" type="number" value={inputs.amount} onChange={e => handleInput('amount', e.target.value)} />
+                                    <input className="flex-1 p-2 bg-[#F9F7F2] rounded text-sm outline-none" placeholder="Descrição" value={inputs.text} onChange={e => handleInput('text', e.target.value)} />
+                                    <input className="w-24 p-2 bg-[#F9F7F2] rounded text-sm outline-none" placeholder="R$" type="number" value={inputs.amount} onChange={e => handleInput('amount', e.target.value)} />
                                     <Button onClick={() => { if(inputs.text && inputs.amount) { addItem('finance', 'transactions', {id: Date.now(), desc: inputs.text, amount: inputs.amount, type: 'income'}); setInputs(p=>({...p, text:'', amount:''})); } }} className="bg-emerald-600 text-white">+</Button>
                                     <Button onClick={() => { if(inputs.text && inputs.amount) { addItem('finance', 'transactions', {id: Date.now(), desc: inputs.text, amount: inputs.amount, type: 'expense'}); setInputs(p=>({...p, text:'', amount:''})); } }} className="bg-red-500 text-white">-</Button>
                                 </div>
@@ -233,8 +230,7 @@
                                             </div>
                                         ))}
                                     </div>
-                                    {/* SELETOR DE TAGS */}
-                                    <select className="w-full mt-2 text-xs bg-transparent border-t border-[#E5E0D8] pt-1" onChange={(e) => { const t = prompt("Tarefa:"); if(t) addItem('weekly', 'events', {id: Date.now(), day, tag: e.target.value, text: t}); e.target.value=""; }}>
+                                    <select className="w-full mt-2 text-xs bg-transparent border-t border-[#E5E0D8] pt-1 outline-none" onChange={(e) => { const t = prompt("Tarefa:"); if(t) addItem('weekly', 'events', {id: Date.now(), day, tag: e.target.value, text: t}); e.target.value=""; }}>
                                         <option value="">+ Adicionar</option>
                                         {tags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
                                     </select>
@@ -245,7 +241,6 @@
                 );
             };
 
-            // --- VISTAS PADRÃO (Saúde, Leitura, etc.) ---
             const renderHealthView = () => {
                 const { muscle, fat, water, bone } = data.health.composition;
                 const createArc = (start, end, color) => {
@@ -328,7 +323,7 @@
                             ))}
                         </div>
                     ) : (
-                        <GenericListView module="spiritual" title="Sala de Oração" icon="Heart" cols={[{id:'family', label:'Família'}, {id:'professional', label:'Profissional'}, {id:'ministerial', label:'Ministerial'}]} />
+                        <GenericListView module="spiritual" title="Sala de Oração" icon="Heart" cols={[{id:'family', label:'Família'}, {id:'professional', label:'Profissional'}, {id:'ministerial', label:'Ministerial'}, {id:'spiritual', label:'Espiritual'}, {id:'love', label:'Amorosa'}, {id:'studies', label:'Estudos'}]} />
                     )}
                 </div>
             );
@@ -350,11 +345,12 @@
                 </div>
             );
 
-            const renderProfessionalView = () => <GenericListView module="professional" title="Profissional" icon="Briefcase" cols={[{id:'objectives', label:'Objetivos'}, {id:'tasks', label:'Tarefas'}]} />;
-            const renderConnectionGroupView = () => <GenericListView module="connectionGroup" title="Grupo de Conexão" icon="Users" cols={[{id:'studies', label:'Estudos'}, {id:'discussed', label:'Discutido'}]} />;
-            const renderGrowthScaleView = () => <GenericListView module="growthScale" title="Escola do Crescimento" icon="GraduationCap" cols={[{id:'notes', label:'Notas'}, {id:'improvements', label:'Melhorias'}]} />;
-            const renderWishlistView = () => <GenericListView module="wishlist" title="Lista de Desejos" icon="Gift" cols={[{id:'home', label:'Casa'}, {id:'personal', label:'Pessoal'}]} />;
-            const renderMarriageView = () => <GenericListView module="marriage" title="Casamento" icon="HeartHandshake" cols={[{id:'todo', label:'Fazer Juntos'}, {id:'gifts', label:'Presentes'}]} />;
+            // RENDERIZADORES GENÉRICOS (AGORA SIM, COMPLETOS!)
+            const renderProfessionalView = () => <GenericListView module="professional" title="Profissional" icon="Briefcase" cols={[{id:'objectives', label:'Objetivos'}, {id:'study', label:'Estudar'}, {id:'important', label:'Importante'}, {id:'meeting', label:'Reuniões'}, {id:'supervisor', label:'Falar c/ Supervisor'}]} />;
+            const renderConnectionGroupView = () => <GenericListView module="connectionGroup" title="Grupo de Conexão" icon="Users" cols={[{id:'studies', label:'Estudos'}, {id:'discussed', label:'Discutido'}, {id:'doubts', label:'Dúvidas'}, {id:'suggestions', label:'Sugestões'}, {id:'readingSuggestions', label:'Sug. Leitura'}, {id:'topics', label:'Tópicos'}]} />;
+            const renderGrowthScaleView = () => <GenericListView module="growthScale" title="Escola do Crescimento" icon="GraduationCap" cols={[{id:'notes', label:'Notas'}, {id:'improvements', label:'Melhorias'}, {id:'teachers', label:'Professores'}, {id:'changes', label:'Alterações'}, {id:'prayers', label:'Orações'}, {id:'futurePlans', label:'Planos'}]} />;
+            const renderWishlistView = () => <GenericListView module="wishlist" title="Lista de Desejos" icon="Gift" cols={[{id:'home', label:'Casa'}, {id:'personal', label:'Pessoal'}, {id:'health', label:'Saúde'}, {id:'wedding', label:'Casamento'}]} />;
+            const renderMarriageView = () => <GenericListView module="marriage" title="Casamento" icon="HeartHandshake" cols={[{id:'schedule', label:'Programações'}, {id:'todoTogether', label:'Fazer Juntos'}, {id:'holidays', label:'Feriados'}, {id:'ourDay15', label:'Dia 15'}, {id:'gifts', label:'Presentes'}, {id:'tips', label:'Dicas'}]} />;
             const renderGoalsView = () => <GenericListView module="goals" title="Objetivos" icon="Target" cols={[{id:'short', label:'Curto Prazo'}, {id:'medium', label:'Médio Prazo'}, {id:'long', label:'Longo Prazo'}]} />;
 
             const MenuBtn = ({id, label, icon}) => (
